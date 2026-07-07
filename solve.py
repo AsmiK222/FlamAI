@@ -137,13 +137,17 @@ def main():
     print(f"  mean = {mean_d:.5f}")
     print(f"  max  = {max_d:.5f}")
 
+    # NOTE: Desmos' cos()/sin() take radians, not degrees, so theta is
+    # converted to radians before being embedded in the LaTeX expression.
+    theta_rad = np.radians(theta_deg)
     latex = (
-        f"\\left(t*\\cos({theta_deg:.4g})-e^{{{M:.4g}\\left|t\\right|}}"
-        f"\\cdot\\sin(0.3t)\\sin({theta_deg:.4g})+{X:.4g},"
-        f"42+t*\\sin({theta_deg:.4g})+e^{{{M:.4g}\\left|t\\right|}}"
-        f"\\cdot\\sin(0.3t)\\cos({theta_deg:.4g})\\right)"
+        f"\\left(t*\\cos({theta_rad:.6g})-e^{{{M:.4g}\\left|t\\right|}}"
+        f"\\cdot\\sin(0.3t)\\sin({theta_rad:.6g})+{X:.4g},"
+        f"42+t*\\sin({theta_rad:.6g})+e^{{{M:.4g}\\left|t\\right|}}"
+        f"\\cdot\\sin(0.3t)\\cos({theta_rad:.6g})\\right)"
     )
-    print(f"\nDesmos/LaTeX (domain 6 <= t <= 60):\n{latex}")
+    print(f"\nDesmos/LaTeX, radians (domain 6 <= t <= 60):\n{latex}")
+    print(f"(theta = {theta_deg:.4g} deg = {theta_rad:.6g} rad)")
 
 
 if __name__ == "__main__":
