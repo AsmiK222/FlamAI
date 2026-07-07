@@ -1,12 +1,79 @@
-# FlamAI
-Parametric Curve Parameter Recovery
-Problem: Given 1500 sample points from a parametric curve x(t), y(t) with three unknown parameters (θ, M, X) constrained to known ranges, recover their values using only the point cloud — no direct access to t.
-Key challenge: The data wasn't ordered by t (consecutive CSV rows jumped around rather than progressing smoothly), so a naive fit assuming t = linspace(6, 60, 1500) in row order failed, converging to a wrong, boundary-pinned solution.
-Method: Treated t as a hidden per-point variable and used an Orthogonal Distance Regression via alternating minimization (ICP-style):
+# Parametric Curve Parameter Recovery
 
-Fix (θ, M, X) → find each point's best-matching t via grid search + refinement.
-Fix those t values → re-fit (θ, M, X) via nonlinear least squares.
-Repeat to convergence.
+Recover the unknown parameters **θ, M, X** of the parametric curve
 
-Result: θ = 30°, M = 0.03, X = 55 — mean fit error of 0.008 units against a curve spanning ~50 units (essentially exact).
-Deliverables: solve.py (reproducible script), README with methodology and Desmos link, and the raw data — packaged as a git-ready repo.
+```
+x(t) = t*cos(θ) - e^(M|t|)·sin(0.3t)·sin(θ) + X
+y(t) = 42 + t*sin(θ) + e^(M|t|)·sin(0.3t)·cos(θ)
+```
+
+given a cloud of `(x, y)` sample points taken from the curve for `t ∈ (6, 60)`.
+
+**Given ranges:**
+- `0° < θ < 50°`
+- `-0.05 < M < 0.05`
+- `0 < X < 100`
+
+## Result
+
+| Parameter | Value |
+|---|---|
+| θ | **30°** |
+| M | **0.03** |
+| X | **55** |
+
+Fitted curve (Desmos):
+```
+(t*cos(30)-e^{0.03|t|}·sin(0.3t)sin(30)+55, 42+t*sin(30)+e^{0.03|t|}·sin(0.3t)cos(30))
+```
+domain `6 ≤ t ≤ 60` — view it live: https://www.desmos.com/calculator/rfj91yrxob
+
+**Validation:** sampling the fitted curve densely (2000 points over `t ∈ [6, 60]`) and
+measuring the distance from every original data point to its nearest point on the curve:
+
+- mean distance: **0.008**
+- max distance: **0.024**
+
+For reference, the data spans roughly 50 units in `x` and 24 units in `y`, so this is
+an essentially exact fit.
+
+## Approach
+
+The 1500 points in `data/xy_data.csv` are **not ordered by `t`** — checking
+`np.diff(x)` / `np.diff(y)` on consecutive rows shows no smooth progression, just
+jumps back and forth. That rules out the naive shortcut of assuming
+`t = linspace(6, 60, 1500)` in row order and fitting `(θ, M, X)` directly against
+that guessed `t` (I tried this first — it gets stuck in a bad local optimum with `M`
+pinned against its bound, since a wrong `t` assignment "explains" real error as noise).
+
+Instead, `t` is treated as a **latent variable, unknown per point**, and the fit is
+done as an **Orthogonal Distance Regression** via alternating minimization
+(same idea as Iterative Closest Point):
+
+1. **Freeze `(θ, M, X)`.** For every data point, find the `t ∈ [6, 60]` that puts the
+   model curve closest to that point — coarse grid search over 2000 points, then a
+   bounded 1-D refinement (`scipy.optimize.minimize_scalar`) around the best grid index.
+2. **Freeze those per-point `t` estimates.** Re-fit `(θ, M, X)` against all 1500 points
+   simultaneously via nonlinear least squares (`scipy.optimize.least_squares`), bounded
+   to the given parameter ranges.
+3. **Repeat** until the parameters stop changing (~30-40 iterations from a generic
+   starting guess; a handful of iterations if started near the true values).
+
+This converges to essentially exact, round-number parameters (θ=30°, M=0.03, X=55),
+which is a good sign the recovery is correct rather than an overfit.
+
+## Usage
+
+```bash
+pip install -r requirements.txt
+python solve.py data/xy_data.csv
+```
+
+Outputs the per-iteration convergence trace, final `(θ, M, X)`, validation error, and
+a ready-to-paste Desmos/LaTeX expression.
+
+## Files
+
+- `solve.py` — fitting script (see docstring for full method details)
+- `data/xy_data.csv` — provided sample points
+- `requirements.txt` — Python dependencies
